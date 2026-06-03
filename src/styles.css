@@ -552,7 +552,7 @@ body {
   color: var(--text-muted);
 }
 
-.badge--local {
+.badge--online {
   color: var(--accent-hover);
   border-color: rgba(122, 155, 184, 0.35);
 }

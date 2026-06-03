@@ -148,7 +148,7 @@ export default function LocalEditorPage() {
         <div className="app-header-text">
           <div className="app-header-top">
             <h1 className="app-title">Snow Editor</h1>
-            <StatusBadge variant="local">{STR.BADGE_LOCAL}</StatusBadge>
+            <StatusBadge variant="online">{STR.BADGE_ONLINE}</StatusBadge>
           </div>
           <p className="app-subtitle">Write calmly. See the result live.</p>
           <div className="mode-switch" role="group" aria-label="Editor mode">

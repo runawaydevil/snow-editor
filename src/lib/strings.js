@@ -22,7 +22,7 @@ export const STR = {
   COPIED: 'Copied',
   COPY_FAILED: 'Could not copy the link.',
 
-  BADGE_LOCAL: 'Local',
+  BADGE_ONLINE: 'Online',
   BADGE_SHARED: 'Shared',
   BADGE_READONLY: 'Read-only',
   BADGE_EDITING: 'Editing',

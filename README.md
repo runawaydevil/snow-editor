@@ -133,7 +133,7 @@ npm run preview   # frontend only; backend must still be running for sharing
 ## Local editor (unchanged)
 
 - Routes: `/` only for local editing
-- Badge **Local**
+- Badge **Online**
 - Autosave to `localStorage` (500ms debounce)
 - **Save .md** / **Save .org**, **Import**, **Clear**, mode switch
 
