@@ -1,12 +1,18 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
-import { previewServerOptions, resolveAllowedHosts } from './vite.shared.js';
+import {
+  previewServerOptions,
+  resolveAllowSearchIndexing,
+  resolveAllowedHosts,
+  robotsSeoPlugin,
+} from './vite.shared.js';
 
 export default defineConfig(({ mode }) => {
   const allowedHosts = resolveAllowedHosts(mode);
+  const allowSearchIndexing = resolveAllowSearchIndexing(mode);
 
   return {
-    plugins: [react()],
+    plugins: [react(), robotsSeoPlugin(allowSearchIndexing)],
     build: {
       target: 'es2020',
       rollupOptions: {
@@ -25,10 +31,22 @@ export default defineConfig(({ mode }) => {
     server: {
       ...previewServerOptions,
       allowedHosts,
+      proxy: {
+        '/api': {
+          target: 'http://localhost:41738',
+          changeOrigin: true,
+        },
+      },
     },
     preview: {
       ...previewServerOptions,
       allowedHosts,
+      proxy: {
+        '/api': {
+          target: 'http://localhost:41738',
+          changeOrigin: true,
+        },
+      },
     },
   };
 });

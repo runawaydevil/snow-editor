@@ -37,3 +37,7 @@ coverage/
 
 # Docker (optional local overrides)
 docker-compose.override.yml
+
+# SQLite data (local / Docker volume)
+data/
+!data/.gitkeep

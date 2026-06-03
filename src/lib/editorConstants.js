@@ -28,28 +28,28 @@ console.log("writing in peace");
 \`\`\`
 `;
 
-const DEFAULT_ORG = `* Diário de Neve
+const DEFAULT_ORG = `* Snow Journal
 
-Bem-vindo ao seu pequeno canto de escrita em Org-mode.
+Welcome to your quiet Org-mode writing nook.
 
-** TODO Ideias
-- Escrever notas
-- Criar documentos
-- Organizar pensamentos
+** TODO Ideas
+- Write notes
+- Create documents
+- Organize thoughts
 
-** DONE Primeiro rascunho
+** DONE First draft
 
 #+BEGIN_QUOTE
-Um espaço limpo para pensar com calma.
+A clean space to think calmly.
 #+END_QUOTE
 
 #+BEGIN_SRC js
-console.log("escrevendo em paz");
+console.log("writing in peace");
 #+END_SRC
 
-** Link de exemplo
+** Example link
 
-[[https://orgmode.org][Site oficial do Org-mode]]
+[[https://orgmode.org][Official Org-mode site]]
 `;
 
 function getStorageKey(mode) {

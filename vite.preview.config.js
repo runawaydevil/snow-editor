@@ -5,5 +5,11 @@ export default defineConfig(({ mode }) => ({
   preview: {
     ...previewServerOptions,
     allowedHosts: resolveAllowedHosts(mode),
+    proxy: {
+      '/api': {
+        target: 'http://localhost:41738',
+        changeOrigin: true,
+      },
+    },
   },
 }));

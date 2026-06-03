@@ -1,6 +1,24 @@
 services:
+  backend:
+    build: ./backend
+    ports:
+      - "41738:41738"
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - PORT=41738
+      - DATABASE_PATH=/app/data/snow.db
+
   editor:
-    build: .
+    build:
+      context: .
+      args:
+        VITE_PUBLIC_ORIGIN: https://snow.pablomurad.com
+        VITE_ALLOW_SEARCH_INDEXING: "false"
     ports:
       - "41737:41737"
+    depends_on:
+      - backend
     restart: unless-stopped
