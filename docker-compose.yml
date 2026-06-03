@@ -1,0 +1,6 @@
+services:
+  editor:
+    build: .
+    ports:
+      - "41737:41737"
+    restart: unless-stopped
