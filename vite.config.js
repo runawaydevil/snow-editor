@@ -24,6 +24,19 @@ export default defineConfig(({ mode }) => {
             if (id.includes('node_modules/marked') || id.includes('node_modules/dompurify')) {
               return 'vendor-markdown';
             }
+            if (
+              id.includes('node_modules/orga') ||
+              id.includes('node_modules/@orgajs') ||
+              id.includes('node_modules/@codemirror') ||
+              id.includes('node_modules/@lezer') ||
+              id.includes('node_modules/unified') ||
+              id.includes('node_modules/rehype') ||
+              id.includes('node_modules/hast') ||
+              id.includes('node_modules/vfile') ||
+              id.includes('node_modules/oast-to-hast')
+            ) {
+              return 'vendor-org';
+            }
           },
         },
       },

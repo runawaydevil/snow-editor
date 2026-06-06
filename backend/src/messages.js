@@ -13,6 +13,12 @@ export const MSG = {
   RATE_LIMIT: 'Too many requests. Try again in a minute.',
   INVALID_JSON: 'Invalid JSON in request body.',
   INTERNAL_ERROR: 'Internal server error.',
+  ORIGIN_NOT_ALLOWED:
+    'Document creation is only allowed from the Snow Editor website.',
+  VERSION_NOT_FOUND: 'Version not found.',
 };
+
+export const APP_VERSION = '0.0.1';
+export const MAX_VERSIONS_PER_DOCUMENT = 50;
 
 export const DEFAULT_DOCUMENT_TITLE = 'Untitled document';

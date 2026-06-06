@@ -1,0 +1,4 @@
+#+TITLE: Heading Sample
+* Top level :work:
+** TODO Nested task
+*** DONE Deep section

@@ -10,6 +10,13 @@ services:
       - NODE_ENV=production
       - PORT=41738
       - DATABASE_PATH=/app/data/snow.db
+      - SHARE_ALLOWED_ORIGINS=https://snow.pablomurad.com,http://localhost:41737,http://127.0.0.1:41737
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:41738/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
   editor:
     build:
@@ -20,5 +27,6 @@ services:
     ports:
       - "41737:41737"
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     restart: unless-stopped

@@ -1,11 +1,12 @@
 import DOMPurify from 'dompurify';
 import { MODES } from './editorConstants.js';
-import { parseOrgMode } from './parseOrgMode.js';
 
-const SANITIZE_OPTIONS = { ADD_ATTR: ['class', 'rel'] };
+const MARKDOWN_SANITIZE_OPTIONS = { ADD_ATTR: ['class', 'rel'] };
 
 let markedParser = null;
 let markedLoadPromise = null;
+let orgToHtmlSync = null;
+let orgLoadPromise = null;
 
 export function ensureMarkedLoaded() {
   if (markedParser) {
@@ -20,13 +21,27 @@ export function ensureMarkedLoaded() {
   return markedLoadPromise;
 }
 
+export function ensureOrgLoaded() {
+  if (orgToHtmlSync) {
+    return Promise.resolve(orgToHtmlSync);
+  }
+  if (!orgLoadPromise) {
+    orgLoadPromise = import('./org/pipeline.js').then((module) => {
+      orgToHtmlSync = module.orgToHtmlSync;
+      return orgToHtmlSync;
+    });
+  }
+  return orgLoadPromise;
+}
+
 export function buildPreviewHtml(mode, content) {
   if (!content || !content.trim()) {
     return '';
   }
 
   if (mode === MODES.ORG) {
-    return DOMPurify.sanitize(parseOrgMode(content), SANITIZE_OPTIONS);
+    if (!orgToHtmlSync) return '';
+    return orgToHtmlSync(content);
   }
 
   if (!markedParser) {
@@ -34,5 +49,5 @@ export function buildPreviewHtml(mode, content) {
   }
 
   const rawHtml = markedParser.parse(content, { gfm: true, breaks: true });
-  return DOMPurify.sanitize(rawHtml, SANITIZE_OPTIONS);
+  return DOMPurify.sanitize(rawHtml, MARKDOWN_SANITIZE_OPTIONS);
 }

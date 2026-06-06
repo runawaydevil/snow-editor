@@ -1,0 +1,4 @@
+#+BEGIN_EXPORT html
+<p>safe</p>
+<script>alert('x')</script>
+#+END_EXPORT

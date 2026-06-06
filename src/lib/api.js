@@ -27,6 +27,7 @@ const ERROR_MESSAGES = {
   LOCK_REQUIRED: STR.LOCK_REQUIRED,
   CONTENT_TOO_LARGE: STR.CONTENT_TOO_LARGE,
   RATE_LIMIT: STR.RATE_LIMIT,
+  ORIGIN_NOT_ALLOWED: STR.ORIGIN_NOT_ALLOWED,
   NETWORK: STR.NETWORK,
 };
 
@@ -118,6 +119,23 @@ export function updateDocument(token, body) {
     method: 'PUT',
     body: JSON.stringify(body),
   });
+}
+
+export function fetchDocumentVersions(token, { clientId, lockToken }) {
+  const params = new URLSearchParams({ clientId, lockToken });
+  return request(
+    `/api/documents/edit/${encodeURIComponent(token)}/versions?${params}`,
+  );
+}
+
+export function restoreDocumentVersion(token, versionId, body) {
+  return request(
+    `/api/documents/edit/${encodeURIComponent(token)}/versions/${encodeURIComponent(versionId)}/restore`,
+    {
+      method: 'POST',
+      body: JSON.stringify(body),
+    },
+  );
 }
 
 export function toAbsoluteUrl(path) {

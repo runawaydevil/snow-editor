@@ -1,6 +1,10 @@
-import { useDeferredValue, useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { MODES } from '../lib/editorConstants.js';
-import { buildPreviewHtml, ensureMarkedLoaded } from '../lib/previewHtml.js';
+import { parseOrgDocument } from '../lib/org/parseDocument.js';
+import { buildPreviewHtml, ensureMarkedLoaded, ensureOrgLoaded } from '../lib/previewHtml.js';
+import OrgOutline from './OrgOutline.jsx';
+
+const OrgEditor = lazy(() => import('./OrgEditor.jsx'));
 
 function useDividerOrientation() {
   const [orientation, setOrientation] = useState('vertical');
@@ -14,6 +18,22 @@ function useDividerOrientation() {
   }, []);
 
   return orientation;
+}
+
+function useWideLayout() {
+  const [wide, setWide] = useState(() =>
+    typeof window !== 'undefined' ? window.matchMedia('(min-width: 900px)').matches : true,
+  );
+
+  useEffect(() => {
+    const media = window.matchMedia('(min-width: 900px)');
+    const update = () => setWide(media.matches);
+    update();
+    media.addEventListener('change', update);
+    return () => media.removeEventListener('change', update);
+  }, []);
+
+  return wide;
 }
 
 export function countWords(text) {
@@ -32,12 +52,15 @@ export default function EditorLayout({
   previewOnly = false,
 }) {
   const [markedReady, setMarkedReady] = useState(false);
+  const [orgReady, setOrgReady] = useState(false);
+  const scrollToLineRef = useRef(null);
   const dividerOrientation = useDividerOrientation();
+  const wideLayout = useWideLayout();
   const deferredContent = useDeferredValue(content);
   const previewIsStale = content !== deferredContent;
 
   useEffect(() => {
-    if (mode !== MODES.MARKDOWN) return;
+    if (mode !== MODES.MARKDOWN) return undefined;
     let cancelled = false;
     ensureMarkedLoaded().then(() => {
       if (!cancelled) setMarkedReady(true);
@@ -47,9 +70,33 @@ export default function EditorLayout({
     };
   }, [mode]);
 
+  useEffect(() => {
+    if (mode !== MODES.ORG) return undefined;
+    let cancelled = false;
+    ensureOrgLoaded().then(() => {
+      if (!cancelled) setOrgReady(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [mode]);
+
+  const orgMeta = useMemo(() => {
+    if (mode !== MODES.ORG) return null;
+    return parseOrgDocument(deferredContent);
+  }, [mode, deferredContent]);
+
   const html = useMemo(() => {
     return buildPreviewHtml(mode, deferredContent);
-  }, [mode, deferredContent, markedReady]);
+  }, [mode, deferredContent, markedReady, orgReady]);
+
+  const handleRegisterScroll = useCallback((scrollFn) => {
+    scrollToLineRef.current = scrollFn;
+  }, []);
+
+  const handleOutlineSelect = useCallback((line) => {
+    scrollToLineRef.current?.(line);
+  }, []);
 
   const wordCount = useMemo(() => countWords(content), [content]);
   const charCount = content.length;
@@ -57,9 +104,18 @@ export default function EditorLayout({
   const editorAriaLabel =
     mode === MODES.ORG ? 'Org-mode editing area' : 'Markdown editing area';
 
+  const showOutline =
+    mode === MODES.ORG && showEditor && !previewOnly && wideLayout && orgMeta?.headings?.length > 0;
+
   return (
     <>
-      <main className={`app-layout${previewOnly ? ' app-layout--preview-only' : ''}`}>
+      <main
+        className={`app-layout${previewOnly ? ' app-layout--preview-only' : ''}${showOutline ? ' app-layout--with-outline' : ''}`}
+      >
+        {showOutline && (
+          <OrgOutline content={content} onSelectHeading={handleOutlineSelect} />
+        )}
+
         {showEditor && !previewOnly && (
           <>
             <section
@@ -67,16 +123,29 @@ export default function EditorLayout({
               aria-label={mode === MODES.ORG ? 'Org-mode editor' : 'Markdown editor'}
             >
               <div className="panel-label">Write</div>
-              <textarea
-                ref={editorRef}
-                className="editor"
-                value={content}
-                onChange={onContentChange ? (e) => onContentChange(e.target.value) : undefined}
-                readOnly={readOnly}
-                spellCheck="true"
-                aria-label={editorAriaLabel}
-                placeholder="Start writing..."
-              />
+              {mode === MODES.ORG ? (
+                <Suspense fallback={<div className="editor editor--loading">Loading Org editor…</div>}>
+                  <OrgEditor
+                    value={content}
+                    onChange={onContentChange}
+                    readOnly={readOnly}
+                    editorRef={editorRef}
+                    ariaLabel={editorAriaLabel}
+                    onRegisterScroll={handleRegisterScroll}
+                  />
+                </Suspense>
+              ) : (
+                <textarea
+                  ref={editorRef}
+                  className="editor"
+                  value={content}
+                  onChange={onContentChange ? (e) => onContentChange(e.target.value) : undefined}
+                  readOnly={readOnly}
+                  spellCheck="true"
+                  aria-label={editorAriaLabel}
+                  placeholder="Start writing..."
+                />
+              )}
             </section>
 
             <div
@@ -92,6 +161,9 @@ export default function EditorLayout({
           aria-label="Document preview"
         >
           <div className="panel-label">Read</div>
+          {orgMeta?.title && (
+            <p className="org-doc-title">{orgMeta.title}</p>
+          )}
           <div
             className={`preview-paper${previewIsStale ? ' preview-updating' : ''}`}
             dangerouslySetInnerHTML={{ __html: html }}

@@ -1,6 +1,13 @@
 import { Router } from 'express';
-import { getDb, purgeExpiredLocks } from '../db.js';
-import { DEFAULT_DOCUMENT_TITLE, MSG } from '../messages.js';
+import rateLimit from 'express-rate-limit';
+import { checkDbHealth, getDb, purgeExpiredLocks } from '../db.js';
+import {
+  APP_VERSION,
+  DEFAULT_DOCUMENT_TITLE,
+  MSG,
+} from '../messages.js';
+import { requireAllowedOrigin } from '../originGuard.js';
+import { saveDocumentVersion } from '../versionUtils.js';
 import {
   assertContentSize,
   assertMode,
@@ -13,6 +20,17 @@ import {
 } from '../utils.js';
 
 const router = Router();
+
+const createDocLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    error: 'RATE_LIMIT',
+    message: MSG.RATE_LIMIT,
+  },
+});
 
 function getDocumentByViewToken(token) {
   return getDb()
@@ -60,11 +78,38 @@ function getActiveLock(documentId) {
     .get(documentId, now);
 }
 
+function validateLock(doc, clientId, lockToken) {
+  purgeExpiredLocks(getDb());
+  const lock = getDb()
+    .prepare(
+      'SELECT * FROM edit_locks WHERE document_id = ? AND lock_token = ? AND client_id = ?',
+    )
+    .get(doc.id, lockToken, clientId);
+
+  if (!lock || isExpired(lock.expires_at)) {
+    return null;
+  }
+  return lock;
+}
+
 router.get('/health', (_req, res) => {
-  res.json({ ok: true });
+  const dbOk = checkDbHealth(getDb());
+  const payload = {
+    ok: dbOk,
+    db: dbOk ? 'ok' : 'error',
+    uptime: Math.floor(process.uptime()),
+    version: APP_VERSION,
+  };
+
+  if (!dbOk) {
+    console.error('[health] database check failed');
+    return res.status(503).json(payload);
+  }
+
+  res.json(payload);
 });
 
-router.post('/documents', (req, res) => {
+router.post('/documents', createDocLimiter, requireAllowedOrigin, (req, res) => {
   const { title, mode, content, expiresIn } = req.body ?? {};
 
   if (!assertMode(mode)) {
@@ -81,12 +126,7 @@ router.post('/documents', (req, res) => {
 
   const expiresAt = parseExpiresIn(expiresIn);
   if (expiresAt === undefined) {
-    return sendError(
-      res,
-      400,
-      'INVALID_EXPIRES_IN',
-      MSG.INVALID_EXPIRES_IN,
-    );
+    return sendError(res, 400, 'INVALID_EXPIRES_IN', MSG.INVALID_EXPIRES_IN);
   }
 
   const id = newId();
@@ -125,6 +165,87 @@ router.get('/documents/edit/:token', (req, res) => {
   const doc = getDocumentByEditToken(req.params.token);
   if (!checkDocumentAccess(doc, res)) return;
   res.json(documentToPublic(doc));
+});
+
+router.get('/documents/edit/:token/versions', (req, res) => {
+  const { clientId, lockToken } = req.query;
+
+  if (!clientId || !lockToken) {
+    return sendError(res, 403, 'LOCK_REQUIRED', MSG.LOCK_REQUIRED);
+  }
+
+  const doc = getDocumentByEditToken(req.params.token);
+  if (!checkDocumentAccess(doc, res)) return;
+
+  const lock = validateLock(doc, String(clientId), String(lockToken));
+  if (!lock) {
+    return sendError(res, 403, 'LOCK_REQUIRED', MSG.LOCK_REQUIRED);
+  }
+
+  const versions = getDb()
+    .prepare(
+      `SELECT id, created_at FROM document_versions
+       WHERE document_id = ?
+       ORDER BY created_at DESC
+       LIMIT 20`,
+    )
+    .all(doc.id)
+    .map((row) => ({
+      id: row.id,
+      createdAt: row.created_at,
+    }));
+
+  res.json({ versions });
+});
+
+router.post('/documents/edit/:token/versions/:versionId/restore', (req, res) => {
+  const { clientId, lockToken } = req.body ?? {};
+
+  if (!clientId || !lockToken) {
+    return sendError(res, 403, 'LOCK_REQUIRED', MSG.LOCK_REQUIRED);
+  }
+
+  const doc = getDocumentByEditToken(req.params.token);
+  if (!checkDocumentAccess(doc, res)) return;
+
+  const lock = validateLock(doc, clientId, lockToken);
+  if (!lock) {
+    return sendError(res, 403, 'LOCK_REQUIRED', MSG.LOCK_REQUIRED);
+  }
+
+  const version = getDb()
+    .prepare(
+      'SELECT * FROM document_versions WHERE id = ? AND document_id = ?',
+    )
+    .get(req.params.versionId, doc.id);
+
+  if (!version) {
+    return sendError(res, 404, 'VERSION_NOT_FOUND', MSG.VERSION_NOT_FOUND);
+  }
+
+  const now = new Date().toISOString();
+  const db = getDb();
+
+  saveDocumentVersion(db, doc, now);
+
+  db.prepare(
+    `UPDATE documents SET title = ?, mode = ?, content = ?, updated_at = ? WHERE id = ?`,
+  ).run(version.title, version.mode, version.content, now, doc.id);
+
+  const lockExpires = lockExpiresAtFromNow();
+  db.prepare('UPDATE edit_locks SET expires_at = ?, updated_at = ? WHERE id = ?').run(
+    lockExpires,
+    now,
+    lock.id,
+  );
+
+  res.json({
+    success: true,
+    title: version.title,
+    mode: version.mode,
+    content: version.content,
+    updated_at: now,
+  });
 });
 
 router.post('/documents/edit/:token/lock', (req, res) => {
@@ -196,12 +317,7 @@ router.post('/documents/edit/:token/lock/refresh', (req, res) => {
     .get(doc.id, lockToken, clientId);
 
   if (!lock || isExpired(lock.expires_at)) {
-    return sendError(
-      res,
-      403,
-      'LOCK_INVALID',
-      MSG.LOCK_INVALID,
-    );
+    return sendError(res, 403, 'LOCK_INVALID', MSG.LOCK_INVALID);
   }
 
   const expiresAt = lockExpiresAtFromNow();
@@ -237,30 +353,11 @@ router.delete('/documents/edit/:token/lock', (req, res) => {
   res.json({ success: true });
 });
 
-function validateLock(doc, clientId, lockToken) {
-  purgeExpiredLocks(getDb());
-  const lock = getDb()
-    .prepare(
-      'SELECT * FROM edit_locks WHERE document_id = ? AND lock_token = ? AND client_id = ?',
-    )
-    .get(doc.id, lockToken, clientId);
-
-  if (!lock || isExpired(lock.expires_at)) {
-    return null;
-  }
-  return lock;
-}
-
 router.put('/documents/edit/:token', (req, res) => {
   const { clientId, lockToken, title, mode, content } = req.body ?? {};
 
   if (!clientId || !lockToken) {
-    return sendError(
-      res,
-      403,
-      'LOCK_REQUIRED',
-      MSG.LOCK_REQUIRED,
-    );
+    return sendError(res, 403, 'LOCK_REQUIRED', MSG.LOCK_REQUIRED);
   }
 
   const doc = getDocumentByEditToken(req.params.token);
@@ -268,12 +365,7 @@ router.put('/documents/edit/:token', (req, res) => {
 
   const lock = validateLock(doc, clientId, lockToken);
   if (!lock) {
-    return sendError(
-      res,
-      403,
-      'LOCK_REQUIRED',
-      MSG.LOCK_REQUIRED,
-    );
+    return sendError(res, 403, 'LOCK_REQUIRED', MSG.LOCK_REQUIRED);
   }
 
   if (!assertMode(mode)) {
@@ -291,13 +383,9 @@ router.put('/documents/edit/:token', (req, res) => {
   const docTitle =
     typeof title === 'string' && title.trim() ? title.trim() : doc.title;
   const now = new Date().toISOString();
-
   const db = getDb();
-  const versionId = newId();
-  db.prepare(
-    `INSERT INTO document_versions (id, document_id, title, mode, content, created_at)
-     VALUES (?, ?, ?, ?, ?, ?)`,
-  ).run(versionId, doc.id, doc.title, doc.mode, doc.content, now);
+
+  saveDocumentVersion(db, doc, now);
 
   db.prepare(
     `UPDATE documents SET title = ?, mode = ?, content = ?, updated_at = ? WHERE id = ?`,

@@ -28,16 +28,25 @@ console.log("writing in peace");
 \`\`\`
 `;
 
-const DEFAULT_ORG = `* Snow Journal
+const DEFAULT_ORG = `#+TITLE: Snow Journal
+#+AUTHOR: Snow Editor
 
-Welcome to your quiet Org-mode writing nook.
+* Welcome :intro:
+A quiet Org-mode writing nook with /live preview/.
 
-** TODO Ideas
-- Write notes
-- Create documents
-- Organize thoughts
+** TODO Ideas :notes:
+- [ ] Write notes
+- [X] Try checklist click in the editor
+- Nested list
+  - Inner item
+  - Another inner item
 
-** DONE First draft
+** DONE First table
+
+| Feature   | Status |
+|-----------+--------|
+| Tables    | yes    |
+| Outline   | yes    |
 
 #+BEGIN_QUOTE
 A clean space to think calmly.
@@ -47,7 +56,7 @@ A clean space to think calmly.
 console.log("writing in peace");
 #+END_SRC
 
-** Example link
+** Links
 
 [[https://orgmode.org][Official Org-mode site]]
 `;

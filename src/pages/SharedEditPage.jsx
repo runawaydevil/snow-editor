@@ -4,6 +4,7 @@ import EditorLayout from '../components/EditorLayout.jsx';
 import ReadOnlyBanner from '../components/ReadOnlyBanner.jsx';
 import SaveStatus from '../components/SaveStatus.jsx';
 import StatusBadge from '../components/StatusBadge.jsx';
+import VersionHistory from '../components/VersionHistory.jsx';
 import { useEditLock } from '../hooks/useEditLock.js';
 import { useServerAutosave } from '../hooks/useServerAutosave.js';
 import {
@@ -12,6 +13,7 @@ import {
   friendlyErrorMessage,
 } from '../lib/api.js';
 import { downloadDocument } from '../lib/download.js';
+import { parseOrgDocument } from '../lib/org/parseDocument.js';
 import { STR } from '../lib/strings.js';
 import LinkErrorPage from './LinkErrorPage.jsx';
 
@@ -25,6 +27,7 @@ export default function SharedEditPage() {
   const [loading, setLoading] = useState(true);
   const [lockLost, setLockLost] = useState(false);
   const editorRef = useRef(null);
+  const titleEditedRef = useRef(false);
 
   const { lockState, acquire, release, hasLock, lockToken, clientId } =
     useEditLock(token, !!doc && !loadError);
@@ -42,11 +45,23 @@ export default function SharedEditPage() {
   });
 
   useEffect(() => {
+    if (mode !== 'org' || titleEditedRef.current) return;
+    const { title: orgTitle } = parseOrgDocument(content);
+    if (
+      orgTitle &&
+      (title === STR.UNTITLED_DOCUMENT || title.trim() === '')
+    ) {
+      setTitle(orgTitle);
+    }
+  }, [content, mode, title]);
+
+  useEffect(() => {
     let cancelled = false;
 
     (async () => {
       setLoading(true);
       setLoadError(null);
+      titleEditedRef.current = false;
       try {
         const data = await fetchEditDocument(token);
         if (cancelled) return;
@@ -101,6 +116,16 @@ export default function SharedEditPage() {
     downloadDocument(content, mode, title);
   }, [content, mode, title]);
 
+  const handleVersionRestored = useCallback(
+    (data) => {
+      setTitle(data.title);
+      setMode(data.mode);
+      setContent(data.content);
+      saveNow();
+    },
+    [saveNow],
+  );
+
   if (loading) {
     return (
       <div className="app">
@@ -149,7 +174,10 @@ export default function SharedEditPage() {
             <input
               className="doc-title-input"
               value={title}
-              onChange={(e) => setTitle(e.target.value)}
+              onChange={(e) => {
+                titleEditedRef.current = true;
+                setTitle(e.target.value);
+              }}
               readOnly={readOnly}
               aria-label="Document title"
             />
@@ -170,6 +198,12 @@ export default function SharedEditPage() {
               <button type="button" className="btn" onClick={handleSaveServer}>
                 {STR.SAVE_TO_SERVER}
               </button>
+              <VersionHistory
+                editToken={token}
+                clientId={clientId}
+                lockToken={lockToken}
+                onRestored={handleVersionRestored}
+              />
               <button type="button" className="btn btn-ghost" onClick={handleRelease}>
                 {STR.RELEASE_EDIT_LOCK}
               </button>

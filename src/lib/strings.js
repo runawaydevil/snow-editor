@@ -62,9 +62,21 @@ export const STR = {
   LOCK_REQUIRED: 'You need an active edit lock to save.',
   CONTENT_TOO_LARGE: 'Document is larger than 1 MB.',
   RATE_LIMIT: 'Too many requests. Try again in a minute.',
+  ORIGIN_NOT_ALLOWED:
+    'Sharing is only available from the Snow Editor website. Open snow.pablomurad.com and try again.',
   NETWORK: 'Could not connect to the server. Check your connection.',
   GENERIC_ERROR: 'Something went wrong.',
   UNEXPECTED_ERROR: 'An unexpected error occurred.',
+
+  VERSION_HISTORY: 'Version history',
+  VERSION_LOADING: 'Loading versions…',
+  VERSION_EMPTY: 'No saved versions yet.',
+  VERSION_RESTORE: 'Restore',
+  VERSION_RESTORING: 'Restoring…',
+  VERSION_RESTORE_CONFIRM:
+    'Restore this version? Your current content will be saved as a new version first.',
+
+  ORG_OUTLINE: 'Outline',
 };
 
 export const EXPIRY_OPTIONS = [
@@ -93,5 +105,13 @@ export function formatLockExpiry(iso) {
     return new Date(iso).toLocaleString(DATE_LOCALE, DATE_OPTIONS);
   } catch {
     return null;
+  }
+}
+
+export function formatVersionDate(iso) {
+  try {
+    return new Date(iso).toLocaleString(DATE_LOCALE, DATE_OPTIONS);
+  } catch {
+    return iso;
   }
 }

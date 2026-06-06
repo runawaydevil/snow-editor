@@ -68,3 +68,12 @@ export function purgeExpiredLocks(database) {
   const now = new Date().toISOString();
   database.prepare('DELETE FROM edit_locks WHERE expires_at <= ?').run(now);
 }
+
+export function checkDbHealth(database) {
+  try {
+    database.prepare('SELECT 1 AS ok').get();
+    return true;
+  } catch {
+    return false;
+  }
+}
