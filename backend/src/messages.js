@@ -1,3 +1,5 @@
+import { readFileSync } from 'fs';
+
 export const MSG = {
   NOT_FOUND: 'Document not found.',
   EXPIRED: 'This link has expired.',
@@ -18,7 +20,11 @@ export const MSG = {
   VERSION_NOT_FOUND: 'Version not found.',
 };
 
-export const APP_VERSION = '0.0.1';
+const pkg = JSON.parse(
+  readFileSync(new URL('../package.json', import.meta.url), 'utf8'),
+);
+
+export const APP_VERSION = pkg.version;
 export const MAX_VERSIONS_PER_DOCUMENT = 50;
 
 export const DEFAULT_DOCUMENT_TITLE = 'Untitled document';

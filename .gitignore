@@ -34,6 +34,9 @@ Thumbs.db
 
 # Test / coverage
 coverage/
+test-results/
+playwright-report/
+backend/.e2e/
 
 # Docker (optional local overrides)
 docker-compose.override.yml

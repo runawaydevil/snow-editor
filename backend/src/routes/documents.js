@@ -7,7 +7,7 @@ import {
   MSG,
 } from '../messages.js';
 import { requireAllowedOrigin } from '../originGuard.js';
-import { saveDocumentVersion } from '../versionUtils.js';
+import { maybeSaveDocumentVersion, saveDocumentVersion } from '../versionUtils.js';
 import {
   assertContentSize,
   assertMode,
@@ -385,7 +385,7 @@ router.put('/documents/edit/:token', (req, res) => {
   const now = new Date().toISOString();
   const db = getDb();
 
-  saveDocumentVersion(db, doc, now);
+  maybeSaveDocumentVersion(db, doc, now);
 
   db.prepare(
     `UPDATE documents SET title = ?, mode = ?, content = ?, updated_at = ? WHERE id = ?`,

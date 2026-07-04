@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import DraftsMenu from '../components/DraftsMenu.jsx';
 import IconButton from '../components/IconButton.jsx';
 import ShareModal from '../components/ShareModal.jsx';
 import StatusBadge from '../components/StatusBadge.jsx';
@@ -9,19 +10,24 @@ import {
   ShareIcon,
   UploadIcon,
 } from '../components/icons/index.js';
+import { deriveTitle } from '../lib/deriveTitle.js';
+import { downloadDocument } from '../lib/download.js';
 import {
-  MODES,
-  isDefaultContent,
-  loadContent,
-  loadMode,
-  persistContent,
-  persistMode,
-} from '../lib/editorConstants.js';
+  createDraft,
+  deleteDraft,
+  ensureDraftsInitialized,
+  listDrafts,
+  loadDraftContent,
+  saveDraft,
+  setCurrentDraftId,
+} from '../lib/drafts.js';
+import { MODES, persistMode } from '../lib/editorConstants.js';
 import { ensureMarkedLoaded } from '../lib/previewHtml.js';
 import { STR } from '../lib/strings.js';
 
 const STORAGE_DEBOUNCE_MS = 500;
-const APP_VERSION = '0.0.1';
+// Injected by Vite from package.json — single source of truth for the version.
+const APP_VERSION = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'dev';
 const CREATOR_NAME = 'Pablo Murad';
 const CREATOR_EMAIL = 'pablomurad@pm.me';
 
@@ -31,37 +37,23 @@ function getFileExtension(filename) {
   return parts[parts.length - 1];
 }
 
-function deriveTitle(content, mode) {
-  const line = content.split('\n').find((l) => l.trim());
-  if (!line) return STR.UNTITLED_DOCUMENT;
-  if (mode === MODES.MARKDOWN) {
-    const m = line.match(/^#+\s+(.+)$/);
-    if (m) return m[1].trim();
-  }
-  if (mode === MODES.ORG) {
-    const m = line.match(/^\*+\s+(.+)$/);
-    if (m) return m[1].replace(/^(TODO|DONE)\s+/, '').trim();
-  }
-  return line.trim().slice(0, 80) || STR.UNTITLED_DOCUMENT;
-}
-
 export default function LocalEditorPage() {
-  const initialMode = loadMode();
-  const [mode, setMode] = useState(initialMode);
-  const [content, setContent] = useState(() => loadContent(initialMode));
+  const [draft, setDraft] = useState(() => ensureDraftsInitialized());
   const [storageWarning, setStorageWarning] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const fileInputRef = useRef(null);
   const editorRef = useRef(null);
 
+  const { id: draftId, mode, content } = draft;
+
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      const saved = persistContent(mode, content);
+      const saved = saveDraft(draftId, { mode, content });
       setStorageWarning(!saved);
     }, STORAGE_DEBOUNCE_MS);
 
     return () => window.clearTimeout(timer);
-  }, [content, mode]);
+  }, [draftId, mode, content]);
 
   const saveLabel = mode === MODES.ORG ? 'Save .org' : 'Save .md';
 
@@ -69,31 +61,68 @@ export default function LocalEditorPage() {
     ensureMarkedLoaded();
   }, []);
 
+  const setContent = useCallback((nextContent) => {
+    setDraft((current) => ({ ...current, content: nextContent }));
+  }, []);
+
   const handleModeChange = useCallback(
     (nextMode) => {
       if (nextMode === mode) return;
-      persistContent(mode, content);
       persistMode(nextMode);
-      setMode(nextMode);
-      setContent(loadContent(nextMode));
+      setDraft((current) => {
+        saveDraft(current.id, { mode: nextMode, content: current.content });
+        return { ...current, mode: nextMode };
+      });
       setStorageWarning(false);
       if (nextMode === MODES.MARKDOWN) prefetchMarkdown();
       editorRef.current?.focus();
     },
-    [mode, content, prefetchMarkdown],
+    [mode, prefetchMarkdown],
+  );
+
+  const flushCurrentDraft = useCallback(() => {
+    saveDraft(draftId, { mode, content });
+  }, [draftId, mode, content]);
+
+  const handleSelectDraft = useCallback(
+    (id) => {
+      flushCurrentDraft();
+      const entry = listDrafts().find((item) => item.id === id);
+      if (!entry) return;
+      setCurrentDraftId(id);
+      persistMode(entry.mode);
+      setDraft({
+        id,
+        mode: entry.mode === MODES.ORG ? MODES.ORG : MODES.MARKDOWN,
+        content: loadDraftContent(id),
+      });
+      setStorageWarning(false);
+      editorRef.current?.focus();
+    },
+    [flushCurrentDraft],
+  );
+
+  const handleCreateDraft = useCallback(() => {
+    flushCurrentDraft();
+    const created = createDraft(mode, '');
+    setDraft(created);
+    setStorageWarning(false);
+    editorRef.current?.focus();
+  }, [flushCurrentDraft, mode]);
+
+  const handleDeleteDraft = useCallback(
+    (id) => {
+      deleteDraft(id);
+      if (id !== draftId) return;
+      const next = ensureDraftsInitialized();
+      persistMode(next.mode);
+      setDraft(next);
+    },
+    [draftId],
   );
 
   const handleSave = useCallback(() => {
-    const isOrg = mode === MODES.ORG;
-    const blob = new Blob([content], {
-      type: isOrg ? 'text/plain;charset=utf-8' : 'text/markdown;charset=utf-8',
-    });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = isOrg ? 'document.org' : 'document.md';
-    link.click();
-    URL.revokeObjectURL(url);
+    downloadDocument(content, mode, deriveTitle(content, mode));
   }, [content, mode]);
 
   const handleImport = useCallback(
@@ -111,36 +140,35 @@ export default function LocalEditorPage() {
         const result = reader.result;
         if (typeof result !== 'string') return;
 
-        if (targetMode !== mode) {
-          persistContent(mode, content);
-          persistMode(targetMode);
-          setMode(targetMode);
-          if (targetMode === MODES.MARKDOWN) prefetchMarkdown();
-        }
-
-        setContent(result);
-        persistContent(targetMode, result);
+        // Imports land in a fresh draft so the current one is never clobbered.
+        flushCurrentDraft();
+        const created = createDraft(targetMode, result);
+        persistMode(targetMode);
+        setDraft(created);
         setStorageWarning(false);
+        if (targetMode === MODES.MARKDOWN) prefetchMarkdown();
       };
       reader.readAsText(file);
       event.target.value = '';
     },
-    [mode, content, prefetchMarkdown],
+    [mode, flushCurrentDraft, prefetchMarkdown],
   );
 
   const handleClear = useCallback(() => {
-    if (!isDefaultContent(mode, content)) {
+    if (content.trim()) {
       const confirmed = window.confirm(
         'Clear the editor and start a blank document? Current content will be replaced.',
       );
       if (!confirmed) return;
     }
 
-    setContent('');
-    persistContent(mode, '');
+    setDraft((current) => {
+      saveDraft(current.id, { mode: current.mode, content: '' });
+      return { ...current, content: '' };
+    });
     setStorageWarning(false);
     editorRef.current?.focus();
-  }, [mode, content]);
+  }, [content]);
 
   return (
     <div className="app">
@@ -173,6 +201,13 @@ export default function LocalEditorPage() {
           </div>
         </div>
         <div className="toolbar" role="toolbar" aria-label="Editor actions">
+          <DraftsMenu
+            currentDraftId={draftId}
+            onListDrafts={listDrafts}
+            onSelectDraft={handleSelectDraft}
+            onCreateDraft={handleCreateDraft}
+            onDeleteDraft={handleDeleteDraft}
+          />
           <IconButton
             icon={<ShareIcon />}
             label={STR.SHARE}
@@ -225,13 +260,15 @@ export default function LocalEditorPage() {
         </p>
       </footer>
 
-      <ShareModal
-        open={shareOpen}
-        onClose={() => setShareOpen(false)}
-        title={deriveTitle(content, mode)}
-        mode={mode}
-        content={content}
-      />
+      {shareOpen && (
+        <ShareModal
+          open
+          onClose={() => setShareOpen(false)}
+          title={deriveTitle(content, mode)}
+          mode={mode}
+          content={content}
+        />
+      )}
     </div>
   );
 }

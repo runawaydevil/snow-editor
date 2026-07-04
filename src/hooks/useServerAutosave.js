@@ -52,7 +52,10 @@ export function useServerAutosave({
 
   useEffect(() => {
     if (!enabled) {
-      setSaveStatus('no_permission');
+      // Not being allowed to save *yet* (lock still being acquired, or viewer
+      // without a lock) is not a save failure — keep the status quiet.
+      // 'no_permission' is reserved for saves actually refused by the server.
+      setSaveStatus('idle');
       return;
     }
 

@@ -22,13 +22,13 @@ export const orgTheme = EditorView.theme({
     color: 'var(--text-muted)',
   },
   '.cm-activeLine': {
-    backgroundColor: 'rgba(122, 155, 184, 0.08)',
+    backgroundColor: 'var(--active-line)',
   },
   '.cm-cursor': {
     borderLeftColor: 'var(--accent-hover)',
   },
   '&.cm-focused .cm-selectionBackground, .cm-selectionBackground': {
-    backgroundColor: 'rgba(122, 155, 184, 0.2) !important',
+    backgroundColor: 'rgba(122, 155, 184, 0.25) !important',
   },
   '.cm-line': {
     lineHeight: '1.55',

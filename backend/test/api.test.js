@@ -1,7 +1,8 @@
 import assert from 'node:assert';
 import { after, before, describe, test } from 'node:test';
 import { createApp } from '../src/app.js';
-import { getDb, initDb } from '../src/db.js';
+import { getDb, initDb, purgeExpiredDocuments } from '../src/db.js';
+import { APP_VERSION } from '../src/messages.js';
 const ALLOWED_ORIGIN = 'http://localhost:41737';
 
 let server;
@@ -62,7 +63,8 @@ describe('Snow Editor API', () => {
     assert.equal(data.ok, true);
     assert.equal(data.db, 'ok');
     assert.equal(typeof data.uptime, 'number');
-    assert.equal(data.version, '0.0.1');
+    assert.equal(data.version, APP_VERSION);
+    assert.match(data.version, /^\d+\.\d+\.\d+$/);
   });
 
   test('POST /documents without Origin is rejected', async () => {
@@ -225,5 +227,71 @@ describe('Snow Editor API', () => {
 
     assert.equal(restoreRes.status, 200);
     assert.equal(restored.content, 'v1');
+  });
+
+  test('rapid consecutive PUTs coalesce into a single version', async () => {
+    const doc = await createDocument({ content: 'first' });
+    const lockRes = await api(`/api/documents/edit/${doc.editToken}/lock`, {
+      method: 'POST',
+      body: { clientId: 'coalesce-client' },
+    });
+    const lock = await readJson(lockRes);
+
+    for (const content of ['second', 'third', 'fourth']) {
+      const res = await api(`/api/documents/edit/${doc.editToken}`, {
+        method: 'PUT',
+        body: {
+          clientId: 'coalesce-client',
+          lockToken: lock.lockToken,
+          title: doc.title,
+          mode: 'markdown',
+          content,
+        },
+      });
+      assert.equal(res.status, 200);
+    }
+
+    const count = getDb()
+      .prepare(
+        'SELECT COUNT(*) AS n FROM document_versions WHERE document_id = ?',
+      )
+      .get(doc.id);
+
+    assert.equal(count.n, 1);
+  });
+
+  test('purgeExpiredDocuments removes expired rows and cascades', () => {
+    // Inserted directly to avoid the 10 req/min create limiter shared by tests.
+    const db = getDb();
+    const docId = 'purge-doc';
+    const past = new Date(Date.now() - 60_000).toISOString();
+    db.prepare(
+      `INSERT INTO documents (id, title, mode, content, view_token, edit_token, expires_at, created_at, updated_at)
+       VALUES (?, 'Purge me', 'markdown', 'bye', 'purge-view', 'purge-edit', ?, ?, ?)`,
+    ).run(docId, past, past, past);
+    db.prepare(
+      `INSERT INTO edit_locks (id, document_id, lock_token, client_id, expires_at, created_at, updated_at)
+       VALUES ('purge-lock', ?, 'purge-lock-token', 'purge-client', ?, ?, ?)`,
+    ).run(docId, past, past, past);
+    db.prepare(
+      `INSERT INTO document_versions (id, document_id, title, mode, content, created_at)
+       VALUES ('purge-version', ?, 'Purge me', 'markdown', 'v0', ?)`,
+    ).run(docId, past);
+
+    const removed = purgeExpiredDocuments(db);
+    assert.ok(removed >= 1);
+
+    const row = db.prepare('SELECT id FROM documents WHERE id = ?').get(docId);
+    assert.equal(row, undefined);
+
+    const locks = db
+      .prepare('SELECT COUNT(*) AS n FROM edit_locks WHERE document_id = ?')
+      .get(docId);
+    assert.equal(locks.n, 0);
+
+    const versions = db
+      .prepare('SELECT COUNT(*) AS n FROM document_versions WHERE document_id = ?')
+      .get(docId);
+    assert.equal(versions.n, 0);
   });
 });

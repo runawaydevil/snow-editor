@@ -1,11 +1,8 @@
-import { useMemo } from 'react';
-import { parseOrgDocument } from '../lib/org/parseDocument.js';
 import { STR } from '../lib/strings.js';
 
-export default function OrgOutline({ content, onSelectHeading, collapsed = false }) {
-  const { headings } = useMemo(() => parseOrgDocument(content), [content]);
-
-  if (collapsed || headings.length === 0) {
+// Outline shared by Markdown and Org — receives pre-parsed headings.
+export default function DocumentOutline({ headings, onSelectHeading }) {
+  if (!headings || headings.length === 0) {
     return null;
   }
 

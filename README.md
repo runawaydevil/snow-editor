@@ -1,8 +1,21 @@
 # Snow Editor
 
-Markdown and Org-mode editor with live preview. Local drafts in `localStorage`. Shared docs via link + SQLite backend.
+Markdown and Org-mode editor with live preview. Multiple local drafts in `localStorage`. Shared docs via link + SQLite backend.
 
 Pablo Murad — pablomurad@pm.me
+
+## Highlights (0.0.2)
+
+- CodeMirror editor for both Markdown and Org (highlight, checklist click-toggle).
+- Multiple local drafts — drafts menu in the toolbar (list, create, delete). Imports open as a new draft.
+- Outline sidebar for Markdown and Org on wide screens.
+- Dark mode (follows `prefers-color-scheme`).
+- Write/Read tabs on mobile; draggable split divider on desktop (double-click resets).
+- Syntax highlighting in preview code blocks (highlight.js, lazy-loaded).
+- Editor → preview scroll sync; capped preview line width for readability.
+- Print styles: Ctrl+P prints only the rendered document.
+- Exported filenames derive from the document title.
+- Server: version snapshots coalesce (5 min window); expired documents are purged hourly.
 
 ## Requirements
 
@@ -45,9 +58,12 @@ npm run preview
 ## Tests
 
 ```bash
-cd backend && npm test
-npm test
+cd backend && npm test   # API unit tests
+npm test                 # Org pipeline unit tests
+npm run test:e2e         # Playwright smoke (starts backend + Vite dev)
 ```
+
+First e2e run needs `npx playwright install chromium`. CI (GitHub Actions) runs unit tests, build, and e2e on every push/PR.
 
 ## Config
 
@@ -68,7 +84,9 @@ Share from `/`: pick title and expiry, get view + edit URLs.
 
 `POST /api/documents` needs a browser `Origin` on the allowlist. No origin → 403.
 
-Edit lock: one editor per doc, 2 min TTL, refreshed every 30s while tab is open.
+Edit lock: one editor per doc, 2 min TTL, refreshed every 30s while tab is open. Released on `pagehide` (re-acquired when restored from bfcache).
+
+Versions: saving snapshots the previous content, coalesced to at most one snapshot per 5 minutes (restores always snapshot). Up to 50 versions per doc. Expired documents (and their locks/versions) are purged at boot and hourly.
 
 ## API
 
@@ -91,7 +109,7 @@ Health returns `{ ok, db, uptime, version }`. DB down → 503.
 
 ## Stack
 
-React, Vite, Express, SQLite (`node:sqlite`), marked, Orga, CodeMirror 6, DOMPurify.
+React, Vite, Express, SQLite (`node:sqlite`), marked, Orga, CodeMirror 6, DOMPurify, highlight.js, Playwright.
 
 ## Org-mode
 
@@ -117,6 +135,7 @@ Or copy `data/snow.db` yourself.
 ## Notes
 
 - No accounts. Edit links are capability tokens — anyone with the link can edit when unlocked.
+- Token leak mitigation: `Referrer-Policy: no-referrer` (nginx + meta) and `noindex` on `/v/` and `/e/` routes.
 - No realtime collab.
 - Preview HTML is sanitized.
 - Monitor production with `GET /api/health`.

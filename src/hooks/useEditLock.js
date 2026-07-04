@@ -110,7 +110,9 @@ export function useEditLock(editToken, enabled = true) {
   useEffect(() => {
     if (!enabled || !editToken) return;
 
-    const onUnload = () => {
+    // pagehide is far more reliable than beforeunload (which mobile browsers
+    // often skip and which disables the back/forward cache).
+    const onPageHide = () => {
       if (!lockTokenRef.current) return;
       const body = JSON.stringify({
         clientId: clientIdRef.current,
@@ -123,11 +125,24 @@ export function useEditLock(editToken, enabled = true) {
         keepalive: true,
         headers: { 'Content-Type': 'application/json' },
       }).catch(() => {});
+      lockTokenRef.current = null;
     };
 
-    window.addEventListener('beforeunload', onUnload);
-    return () => window.removeEventListener('beforeunload', onUnload);
-  }, [enabled, editToken]);
+    // Restored from the back/forward cache: the lock was released on the way
+    // out, so grab it again to keep editing seamless.
+    const onPageShow = (event) => {
+      if (event.persisted && !lockTokenRef.current) {
+        acquire().catch(() => {});
+      }
+    };
+
+    window.addEventListener('pagehide', onPageHide);
+    window.addEventListener('pageshow', onPageShow);
+    return () => {
+      window.removeEventListener('pagehide', onPageHide);
+      window.removeEventListener('pageshow', onPageShow);
+    };
+  }, [enabled, editToken, acquire]);
 
   return {
     clientId: clientIdRef.current,

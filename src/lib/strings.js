@@ -77,6 +77,18 @@ export const STR = {
     'Restore this version? Your current content will be saved as a new version first.',
 
   ORG_OUTLINE: 'Outline',
+
+  TAB_WRITE: 'Write',
+  TAB_READ: 'Read',
+  PREVIEW_EMPTY: 'The preview appears here as you write…',
+  PREVIEW_RENDERING: 'Preparing preview…',
+  RESIZE_PANELS: 'Drag to resize panels. Double-click to reset.',
+
+  DRAFTS: 'Drafts',
+  NEW_DRAFT: 'New draft',
+  DELETE_DRAFT: 'Delete draft',
+  DELETE_DRAFT_CONFIRM: (title) =>
+    `Delete "${title}"? This cannot be undone.`,
 };
 
 export const EXPIRY_OPTIONS = [

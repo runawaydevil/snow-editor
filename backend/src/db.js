@@ -69,6 +69,18 @@ export function purgeExpiredLocks(database) {
   database.prepare('DELETE FROM edit_locks WHERE expires_at <= ?').run(now);
 }
 
+// Expired documents only ever answered 410 before; the rows (and their
+// versions) stayed in SQLite forever. Locks and versions cascade via FK.
+export function purgeExpiredDocuments(database) {
+  const now = new Date().toISOString();
+  const result = database
+    .prepare(
+      'DELETE FROM documents WHERE expires_at IS NOT NULL AND expires_at <= ?',
+    )
+    .run(now);
+  return result.changes;
+}
+
 export function checkDbHealth(database) {
   try {
     database.prepare('SELECT 1 AS ok').get();

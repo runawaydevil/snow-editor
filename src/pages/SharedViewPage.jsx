@@ -4,10 +4,12 @@ import EditorLayout from '../components/EditorLayout.jsx';
 import StatusBadge from '../components/StatusBadge.jsx';
 import { ApiError, fetchViewDocument, friendlyErrorMessage } from '../lib/api.js';
 import { downloadDocument } from '../lib/download.js';
+import { useNoIndex } from '../hooks/useNoIndex.js';
 import { STR } from '../lib/strings.js';
 import LinkErrorPage from './LinkErrorPage.jsx';
 
 export default function SharedViewPage() {
+  useNoIndex();
   const { token } = useParams();
   const [doc, setDoc] = useState(null);
   const [error, setError] = useState(null);

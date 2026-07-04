@@ -6,6 +6,7 @@ import SaveStatus from '../components/SaveStatus.jsx';
 import StatusBadge from '../components/StatusBadge.jsx';
 import VersionHistory from '../components/VersionHistory.jsx';
 import { useEditLock } from '../hooks/useEditLock.js';
+import { useNoIndex } from '../hooks/useNoIndex.js';
 import { useServerAutosave } from '../hooks/useServerAutosave.js';
 import {
   ApiError,
@@ -18,6 +19,7 @@ import { STR } from '../lib/strings.js';
 import LinkErrorPage from './LinkErrorPage.jsx';
 
 export default function SharedEditPage() {
+  useNoIndex();
   const { token } = useParams();
   const [doc, setDoc] = useState(null);
   const [title, setTitle] = useState('');
@@ -93,11 +95,19 @@ export default function SharedEditPage() {
     acquire().catch(() => {});
   }, [doc, loadError, acquire]);
 
+  // Track whether we ever held the lock: autosave reports "no_permission"
+  // while the lock is still being acquired, which must not count as "lost".
+  const hadLockRef = useRef(false);
+
+  useEffect(() => {
+    if (hasLock) hadLockRef.current = true;
+  }, [hasLock]);
+
   useEffect(() => {
     if (lockState.status === 'lost') {
       setLockLost(true);
     }
-    if (saveStatus === 'no_permission') {
+    if (saveStatus === 'no_permission' && hadLockRef.current) {
       setLockLost(true);
     }
   }, [lockState.status, saveStatus]);

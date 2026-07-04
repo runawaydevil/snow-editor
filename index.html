@@ -3,9 +3,12 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- Share links carry capability tokens in the URL; never leak them via Referer. -->
+    <meta name="referrer" content="no-referrer" />
     <meta name="description" content="Cozy Markdown and Org-mode editor with live preview" />
     <meta name="author" content="Pablo Murad" />
-    <meta name="theme-color" content="#fefefe" />
+    <meta name="theme-color" content="#fefefe" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#14181e" media="(prefers-color-scheme: dark)" />
     <title>Snow Editor</title>
     <link rel="icon" type="image/png" href="/favicon.png" sizes="72x72" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
@@ -13,7 +16,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=JetBrains+Mono:wght@400;500&display=swap"
       rel="stylesheet"
     />
   </head>
